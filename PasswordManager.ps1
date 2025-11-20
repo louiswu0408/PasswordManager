@@ -329,6 +329,5 @@ while ($true) {
         default { Write-Host "Invalid choice, try again." }
     }
     Write-Host "`n"
-    pause
-    Write-Host "`n"
+    Start-Sleep -Seconds 1
 }
