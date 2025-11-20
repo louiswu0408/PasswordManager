@@ -345,7 +345,7 @@ while ($true) {
             Write-Host "Incorrect master password."
         }
     } else {
-        Write-Host "No vault found. Type 'sign up' to create a master password."
+        Write-Host "No vault found. Type 'new' to create a master password."
     }
 }
 # Main Loop
@@ -363,3 +363,4 @@ while ($true) {
     }
     Write-Host "`n"
 }
+random
