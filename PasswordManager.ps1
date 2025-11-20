@@ -1,5 +1,9 @@
 # PasswordManager.ps1
 
+$secureMaster = Read-Host -AsSecureString "Enter your master password"
+$BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureMaster)
+$master = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+$masterHash = [Convert]::ToBase64String((New-Object Security.Cryptography.SHA256Managed).ComputeHash([Text.Encoding]::UTF8.GetBytes($master)))
 $vault = [System.Collections.ArrayList]@()
 $vaultFile = "$PSScriptRoot\vault.json"
 Write-Host $PSScriptRoot
@@ -31,6 +35,7 @@ function Load-Data {
                 Site     = $item.Site
                 Username = $item.Username
                 Password = $item.Password
+                MasterHash  = $item.MasterHash
             }) | Out-Null
         }
 
@@ -53,14 +58,68 @@ function Save-Data {
 }
 
 function Encrypt-Data {
-    param($plainText, $masterKey)
-    # todo
+    param(
+        [string]$plainText,
+        [string]$masterKey
+    )
+
+    # --- Generate RANDOM salt ---
+    $salt = New-Object byte[] 16
+    [System.Security.Cryptography.RNGCryptoServiceProvider]::Create().GetBytes($salt)
+
+    # --- Derive key from password + salt ---
+    $derive = New-Object System.Security.Cryptography.Rfc2898DeriveBytes($masterKey, $salt, 10000)
+    $key = $derive.GetBytes(32)  # 256-bit key
+
+    # --- Create AES and random IV ---
+    $aes = [System.Security.Cryptography.Aes]::Create()
+    $aes.GenerateIV()
+    $iv = $aes.IV
+
+    $aes.Key = $key
+    $aes.IV  = $iv
+
+    # --- Encrypt ---
+    $encryptor = $aes.CreateEncryptor()
+    $plainBytes = [Text.Encoding]::UTF8.GetBytes($plainText)
+    $cipherBytes = $encryptor.TransformFinalBlock($plainBytes, 0, $plainBytes.Length)
+
+    # --- Store salt + iv + ciphertext together ---
+    $result = $salt + $iv + $cipherBytes
+    return [Convert]::ToBase64String($result)
 }
 
+
+
 function Decrypt-Data {
-    param($encrypted, $masterKey)
-    # todo
+    param(
+        [string]$encrypted,
+        [string]$masterKey
+    )
+
+    $allBytes = [Convert]::FromBase64String($encrypted)
+
+    # --- Extract salt + iv ---
+    $salt = $allBytes[0..15]
+    $iv   = $allBytes[16..31]
+    $cipherBytes = $allBytes[32..($allBytes.Length-1)]
+
+    # --- Derive key using the same salt ---
+    $derive = New-Object System.Security.Cryptography.Rfc2898DeriveBytes($masterKey, $salt, 10000)
+    $key = $derive.GetBytes(32)
+
+    # --- AES setup ---
+    $aes = [System.Security.Cryptography.Aes]::Create()
+    $aes.Key = $key
+    $aes.IV  = $iv
+
+    $decryptor = $aes.CreateDecryptor()
+    $plainBytes = $decryptor.TransformFinalBlock($cipherBytes, 0, $cipherBytes.Length)
+
+    return [Text.Encoding]::UTF8.GetString($plainBytes)
 }
+
+
 
 function Add-Password {
     # Ask for site
@@ -72,18 +131,21 @@ function Add-Password {
     # Ask for password
     $password = Read-Host "Enter password"
     
+    $encryptedPassword = Encrypt-Data -plainText $password -masterKey $master
     # Add new entry
     $vault.Add([PSCustomObject]@{
         Site     = $site
         Username = $username
-        Password = $password
+        Password = $encryptedPassword
+        MasterHash  = $masterHash
     }) | Out-Null
     Save-Data -filePath $vaultFile
     Write-Host "Added account for $site"
 }
 
 function Get-Password {
-    $sites = $vault | Select-Object -ExpandProperty Site -Unique
+    $filteredVault = $vault | Where-Object { $_.MasterHash -eq $masterHash }
+    $sites = @($filteredVault | Select-Object -ExpandProperty Site -Unique)
     Write-Host "Available sites:"
     for ($i = 0; $i -lt $sites.Count; $i++) {
         Write-Host "[$i] $($sites[$i])"
@@ -104,10 +166,11 @@ function Get-Password {
     # Find matching accounts
     $siteMatches = @()
     foreach ($item in $vault) {
-        if ($item.Site -eq $site) {
+        if ($item.Site -eq $site -and $item.MasterHash -eq $masterHash) {
             $siteMatches += [PSCustomObject]$item
         }
     }
+
 
     if ($siteMatches.Count -eq 0) {
         Write-Host "No accounts found for '$site'"
@@ -118,9 +181,14 @@ function Get-Password {
         $acc = $siteMatches[0]
         Write-Host "`nUsername: $($acc.Username) is copied"
         $acc.Username | Set-Clipboard
-        Start-Sleep -Seconds 5
-        Write-Host "Password: $($acc.Password) is copied"
-        $acc.Password | Set-Clipboard
+        $seconds = 5
+        for ($i = $seconds; $i -gt 0; $i--) {
+            Write-Host -NoNewline "`rClearing clipboard in $i seconds..."
+            Start-Sleep -Seconds 1
+        }
+        $decryptedPassword = Decrypt-Data -encrypted $acc.Password -masterKey $master
+        Write-Host "Password: $decryptedPassword is copied"
+        $decryptedPassword | Set-Clipboard
         return
     }
 
@@ -139,9 +207,14 @@ function Get-Password {
     $acc = $siteMatches[$idx]
     Write-Host "`nUsername: $($acc.Username) is copied"
     $acc.Username | Set-Clipboard
-    Start-Sleep -Seconds 5
-    Write-Host "Password: $($acc.Password) is copied"
-    $acc.Password | Set-Clipboard
+    $seconds = 5
+    for ($i = $seconds; $i -gt 0; $i--) {
+        Write-Host -NoNewline "`rClearing clipboard in $i seconds..."
+        Start-Sleep -Seconds 1
+    }
+    $decryptedPassword = Decrypt-Data -encrypted $acc.Password -masterKey $master
+    Write-Host "Password: $decryptedPassword is copied"
+    $decryptedPassword | Set-Clipboard
 }
 
 function Delete-Password {
@@ -166,12 +239,25 @@ function Delete-Password {
 }
 
 function List-Accounts {
+
     if ($vault.Count -eq 0) {
         Write-Host "Vault is empty."
         return
     }
+
+
+    # Filter vault by master hash
+    $filteredVault = $vault | Where-Object { $_.MasterHash -eq $masterHash }
+    
+    if ($filteredVault.Count -eq 0) {
+        Write-Host "No accounts found for your master password."
+        return
+    }
+
     Write-Host "`nSaved accounts:"
-    $grouped = $vault | Group-Object Site
+
+    # Group by site, sorted
+    $grouped = $filteredVault | Sort-Object Site, Username | Group-Object Site
 
     foreach ($group in $grouped) {
         Write-Host "`nSite: $($group.Name)"
@@ -196,6 +282,7 @@ while ($true) {
         5 { return }
         default { Write-Host "Invalid choice, try again." }
     }
+    Write-Host "`n"
     pause
     Write-Host "`n"
 }
