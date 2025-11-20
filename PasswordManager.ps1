@@ -227,25 +227,62 @@ function Get-Password {
 }
 
 function Delete-Password {
-    $site = Read-Host "Enter site to delete"
-    $accounts = $vault | Where-Object { $_.Site -eq $site }
-    if ($accounts.Count -eq 0) {
-        Write-Host "No account found for $site"
+    # Filter vault by master hash
+    $filteredVault = $vault | Where-Object { $_.MasterHash -eq $masterHash }
+
+    # Get unique sites
+    $sites = @($filteredVault | Select-Object -ExpandProperty Site -Unique)
+    if ($sites.Count -eq 0) {
+        Write-Host "No accounts found for your master password."
         return
     }
 
-    for ($i=0; $i -lt $accounts.Count; $i++) {
-        Write-Host "[$i] $($accounts[$i].Username)"
+    # Show available sites
+    Write-Host "Available sites:"
+    for ($i = 0; $i -lt $sites.Count; $i++) {
+        Write-Host "[$i] $($sites[$i])"
     }
 
-    $index = Read-Host "Enter the number of the account to delete"
+    # Ask user to choose a site
+    do {
+        $siteChoice = Read-Host "Enter site number to delete"
+        if ($siteChoice -notmatch '^\d+$' -or [int]$siteChoice -ge $sites.Count) {
+            Write-Host "Invalid selection, try again."
+            continue
+        }
+        break
+    } while ($true)
+
+    $site = $sites[[int]$siteChoice]
+
+    # Get accounts for the selected site
+    $accounts = $filteredVault | Where-Object { $_.Site -eq $site }
+    if ($accounts.Count -eq 0) {
+        Write-Host "No accounts found for $site"
+        return
+    }
+
+    # If multiple accounts, ask which one to delete
+        for ($i = 0; $i -lt $accounts.Count; $i++) {
+            Write-Host "[$i] $($accounts[$i].Username)"
+        }
+        do {
+            $index = Read-Host "Enter the number of the account to delete"
+            if ($index -notmatch '^\d+$' -or [int]$index -ge $accounts.Count) {
+                Write-Host "Invalid selection, try again."
+                continue
+            }
+            break
+        } while ($true)
+
     $selected = $accounts[$index]
 
+    # Remove account and save vault
     $vault.Remove($selected) | Out-Null
     Save-Data -filePath $vaultFile
     Write-Host "Deleted account $($selected.Username) at $site"
-
 }
+
 
 function List-Accounts {
 
