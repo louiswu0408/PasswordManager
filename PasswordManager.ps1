@@ -68,7 +68,7 @@ function Encrypt-Data {
     [System.Security.Cryptography.RNGCryptoServiceProvider]::Create().GetBytes($salt)
 
     # --- Derive key from password + salt ---
-    $derive = New-Object System.Security.Cryptography.Rfc2898DeriveBytes($masterKey, $salt, 10000)
+    $derive = New-Object System.Security.Cryptography.Rfc2898DeriveBytes($masterKey, $salt, 200000)
     $key = $derive.GetBytes(32)  # 256-bit key
 
     # --- Create AES and random IV ---
@@ -105,7 +105,7 @@ function Decrypt-Data {
     $cipherBytes = $allBytes[32..($allBytes.Length-1)]
 
     # --- Derive key using the same salt ---
-    $derive = New-Object System.Security.Cryptography.Rfc2898DeriveBytes($masterKey, $salt, 10000)
+    $derive = New-Object System.Security.Cryptography.Rfc2898DeriveBytes($masterKey, $salt, 200000)
     $key = $derive.GetBytes(32)
 
     # --- AES setup ---
@@ -131,6 +131,15 @@ function Add-Password {
     # Ask for password
     $password = Read-Host "Enter password"
     
+    $exists = $vault | Where-Object {
+        $_.Site -eq $site -and $_.Username -eq $username -and $_.MasterHash -eq $masterHash
+    }
+
+    if ($exists.Count -gt 0) {
+        Write-Host "⚠ An account with the same site and username already exists."
+        return
+    }
+
     $encryptedPassword = Encrypt-Data -plainText $password -masterKey $master
     # Add new entry
     $vault.Add([PSCustomObject]@{
