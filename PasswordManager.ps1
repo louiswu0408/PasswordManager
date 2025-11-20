@@ -1,9 +1,5 @@
 # PasswordManager.ps1
 
-$secureMaster = Read-Host -AsSecureString "Enter your master password"
-$BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureMaster)
-$master = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
-$masterHash = [Convert]::ToBase64String((New-Object Security.Cryptography.SHA256Managed).ComputeHash([Text.Encoding]::UTF8.GetBytes($master)))
 $vault = [System.Collections.ArrayList]@()
 $vaultFile = "$PSScriptRoot\vault.json"
 Write-Host $PSScriptRoot
@@ -315,6 +311,43 @@ function List-Accounts {
 }
 
 Load-Data -filePath $vaultFile
+while ($true) {
+    $secureMaster = Read-Host -AsSecureString "Enter your master password (type 'new' to create, "q" to quit)"
+    
+    # Check if user typed 'sign up'
+    if ($secureMaster.Length -eq 0) { continue } # ignore empty input
+    $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureMaster)
+    $inputMaster = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+    
+    if ($inputMaster -ieq "new") {
+        # Create new master password
+        $secureMaster = Read-Host -AsSecureString "Create a new master password"
+        $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureMaster)
+        $master = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+        $masterHash = [Convert]::ToBase64String((New-Object Security.Cryptography.SHA256Managed).ComputeHash([Text.Encoding]::UTF8.GetBytes($master)))
+        Write-Host "Master password set. You can now use the password manager."
+        break
+    }
+
+    if ($inputMaster -ieq "q") {
+        exit 0
+    }
+    # If vault exists, validate password
+    if ($vault.Count -gt 0) {
+        $inputHash = [Convert]::ToBase64String((New-Object Security.Cryptography.SHA256Managed).ComputeHash([Text.Encoding]::UTF8.GetBytes($inputMaster)))
+        # Check against any stored master hashes
+        if ($vault | Where-Object { $_.MasterHash -eq $inputHash }) {
+            $master = $inputMaster
+            $masterHash = $inputHash
+            Write-Host "Sign-in successful."
+            break
+        } else {
+            Write-Host "Incorrect master password."
+        }
+    } else {
+        Write-Host "No vault found. Type 'sign up' to create a master password."
+    }
+}
 # Main Loop
 while ($true) {
     Show-Menu
@@ -329,5 +362,4 @@ while ($true) {
         default { Write-Host "Invalid choice, try again." }
     }
     Write-Host "`n"
-    Start-Sleep -Seconds 1
 }
