@@ -321,11 +321,21 @@ while ($true) {
     
     if ($inputMaster -ieq "new") {
         # Create new master password
-        $secureMaster = Read-Host -AsSecureString "Create a new master password"
+        do {
+            $secureMaster = Read-Host -AsSecureString "Create a new master password"
+            $doublecheck = Read-Host -AsSecureString "Confirm master password"
+            $plain1 = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureMaster))
+            $plain2 = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($doublecheck))
+            if ($plain1 -ne $plain2) {
+                Write-Host "Passwords do not match."
+                continue
+            }
+            break
+        } while ( $true )
+        Write-Host "Master password set. You can now use the password manager."
         $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureMaster)
         $master = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
         $masterHash = [Convert]::ToBase64String((New-Object Security.Cryptography.SHA256Managed).ComputeHash([Text.Encoding]::UTF8.GetBytes($master)))
-        Write-Host "Master password set. You can now use the password manager."
         break
     }
 
