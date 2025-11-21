@@ -225,7 +225,7 @@ function Delete-Password {
     # Show available sites
     Write-Host "Available sites:"
     for ($i = 0; $i -lt $sites.Count; $i++) {
-        Write-Host "[$i] $($sites[$i])" - ForegroundColor Yellow
+        Write-Host "[$i] $($sites[$i])" -ForegroundColor Yellow
     }
     Write-Host "[b] cancel" -ForegroundColor DarkYellow
     # Ask user to choose a site
@@ -307,6 +307,7 @@ function List-Accounts {
             Write-Host ("{0,-5} {1}" -f "[$i]", $accounts[$i].Username) -ForegroundColor Yellow
         }
     }
+    pause
 }
 
 
@@ -350,6 +351,7 @@ while ($true) {
 }
 # Main Loop
 while ($true) {
+    Clear-Host
     Show-Menu
     $choice = Read-Host "Choose an option"
 
@@ -361,5 +363,4 @@ while ($true) {
         5 { return }
         default { Write-Host "Invalid choice, try again." }
     }
-    Write-Host "`n"
 }
