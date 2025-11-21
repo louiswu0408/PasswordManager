@@ -2,15 +2,14 @@
 
 $vault = [System.Collections.ArrayList]@()
 $vaultFile = "$PSScriptRoot\vault.json"
-Write-Host $PSScriptRoot
 function Show-Menu {
-    Write-Host "Password Manager"
-    Write-Host "----------------"
-    Write-Host "1. Add Password"
-    Write-Host "2. Retrieve Password"
-    Write-Host "3. List Accounts"
-    Write-Host "4. Delete Password"
-    Write-Host "5. Exit"
+    Write-Host "Password Manager" -ForegroundColor Cyan
+    Write-Host "----------------" -ForegroundColor DarkCyan
+    Write-Host "[1] Add Password" -ForegroundColor Yellow
+    Write-Host "[2] Retrieve Password" -ForegroundColor Yellow
+    Write-Host "[3] List Accounts" -ForegroundColor Yellow
+    Write-Host "[4] Delete Password" -ForegroundColor Yellow
+    Write-Host "[5] Exit" -ForegroundColor Yellow
 }
 
 function Load-Data {
@@ -153,12 +152,13 @@ function Get-Password {
     $sites = @($filteredVault | Select-Object -ExpandProperty Site -Unique)
     Write-Host "Available sites:"
     for ($i = 0; $i -lt $sites.Count; $i++) {
-        Write-Host "[$i] $($sites[$i])"
+        Write-Host "[$i] $($sites[$i])" -ForegroundColor Yellow
     }
-
+    Write-Host "[b] cancel" -ForegroundColor DarkYellow
     # Ask user to choose a site
     do {
         $siteChoice = Read-Host "Enter site number"
+        if ($siteChoice -ieq "b") { return }
         if ($siteChoice -notmatch '^\d+$' -or [int]$siteChoice -ge $sites.Count) {
             Write-Host "Invalid selection, try again."
             continue
@@ -182,32 +182,21 @@ function Get-Password {
         return
     }
 
-    if ($siteMatches.Count -eq 1) {
-        $acc = $siteMatches[0]
-        Write-Host "`nUsername: $($acc.Username) is copied"
-        $acc.Username | Set-Clipboard
-        $seconds = 5
-        for ($i = $seconds; $i -gt 0; $i--) {
-            Write-Host -NoNewline "`rClearing clipboard in $i seconds..."
-            Start-Sleep -Seconds 1
+    if ($siteMatches.Count -gt 1) {
+        for ($i = 0; $i -lt $siteMatches.Count; $i++) {
+            Write-Host "[$i] $($siteMatches[$i].Username)" -ForegroundColor Yellow
         }
-        $decryptedPassword = Decrypt-Data -encrypted $acc.Password -masterKey $master
-        Write-Host "Password: $decryptedPassword is copied"
-        $decryptedPassword | Set-Clipboard
-        return
+        Write-Host "[b] cancel" -ForegroundColor DarkYellow
+        do {
+            $choice = (Read-Host "Which account?").Trim()
+            if ($choice -ieq "b") { return }
+            if ($choice -notmatch '^\d+$') { Write-Host "Please enter a number."; continue }
+            $idx = [int]$choice
+            if ($idx -lt 0 -or $idx -ge $siteMatches.Count) { Write-Host "Out of range"; continue }
+            break
+        } while ($true)
     }
-
-    for ($i = 0; $i -lt $siteMatches.Count; $i++) {
-        Write-Host "[$i] $($siteMatches[$i].Username)"
-    }
-
-    do {
-        $choice = (Read-Host "Which account?").Trim()
-        if ($choice -notmatch '^\d+$') { Write-Host "Please enter a number."; continue }
-        $idx = [int]$choice
-        if ($idx -lt 0 -or $idx -ge $siteMatches.Count) { Write-Host "Out of range"; continue }
-        break
-    } while ($true)
+    else { $idx = 0 }
 
     $acc = $siteMatches[$idx]
     Write-Host "`nUsername: $($acc.Username) is copied"
@@ -236,12 +225,14 @@ function Delete-Password {
     # Show available sites
     Write-Host "Available sites:"
     for ($i = 0; $i -lt $sites.Count; $i++) {
-        Write-Host "[$i] $($sites[$i])"
+        Write-Host "[$i] $($sites[$i])" - ForegroundColor Yellow
     }
-
+    Write-Host "[b] cancel" -ForegroundColor DarkYellow
     # Ask user to choose a site
     do {
-        $siteChoice = Read-Host "Enter site number to delete"
+        Write-Host "`nSelect a site (or 'b' to cancel): " -NoNewline -ForegroundColor Green
+        $siteChoice = Read-Host
+        if ($siteChoice -ieq "b") { return } 
         if ($siteChoice -notmatch '^\d+$' -or [int]$siteChoice -ge $sites.Count) {
             Write-Host "Invalid selection, try again."
             continue
@@ -257,19 +248,24 @@ function Delete-Password {
         Write-Host "No accounts found for $site"
         return
     }
-
-    # If multiple accounts, ask which one to delete
+    if ($accounts.Count -gt 1) {
         for ($i = 0; $i -lt $accounts.Count; $i++) {
-            Write-Host "[$i] $($accounts[$i].Username)"
+            Write-Host "[$i] $($accounts[$i].Username)" -ForegroundColor Yellow
         }
+        Write-Host "[b] cancel" -ForegroundColor DarkYellow
         do {
             $index = Read-Host "Enter the number of the account to delete"
+            if ($index -ieq "b") { return }
             if ($index -notmatch '^\d+$' -or [int]$index -ge $accounts.Count) {
                 Write-Host "Invalid selection, try again."
                 continue
             }
             break
         } while ($true)
+    }
+    else {
+        $index = 0
+    }
 
     $selected = $accounts[$index]
 
@@ -283,32 +279,36 @@ function Delete-Password {
 function List-Accounts {
 
     if ($vault.Count -eq 0) {
-        Write-Host "Vault is empty."
+        Write-Host "Vault is empty." -ForegroundColor Red
         return
     }
-
 
     # Filter vault by master hash
     $filteredVault = $vault | Where-Object { $_.MasterHash -eq $masterHash }
     
     if ($filteredVault.Count -eq 0) {
-        Write-Host "No accounts found for your master password."
+        Write-Host "No accounts found for your master password." -ForegroundColor Red
         return
     }
 
-    Write-Host "`nSaved accounts:"
+    Write-Host "`nSaved accounts:" -ForegroundColor Cyan
 
     # Group by site, sorted
     $grouped = $filteredVault | Sort-Object Site, Username | Group-Object Site
 
     foreach ($group in $grouped) {
-        Write-Host "`nSite: $($group.Name)"
+        Write-Host "`nSite: $($group.Name)" -ForegroundColor Cyan
         $accounts = $group.Group
+
+        # Optional header
+        Write-Host ("{0,-5} {1}" -f "Index", "Username") -ForegroundColor DarkCyan
+
         for ($i = 0; $i -lt $accounts.Count; $i++) {
-            Write-Host "[$i] $($accounts[$i].Username)"
+            Write-Host ("{0,-5} {1}" -f "[$i]", $accounts[$i].Username) -ForegroundColor Yellow
         }
     }
 }
+
 
 Load-Data -filePath $vaultFile
 while ($true) {
@@ -363,4 +363,3 @@ while ($true) {
     }
     Write-Host "`n"
 }
-random
