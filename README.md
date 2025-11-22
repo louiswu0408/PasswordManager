@@ -10,7 +10,7 @@ Stores encrypted passwords locally and allows adding, retrieving, listing, and d
 - Store multiple accounts with username and password.
 - Encrypt passwords using AES-256 with a unique salt and IV per entry.
 - Derive encryption key from your master password using PBKDF2 (Rfc2898DeriveBytes).
-- Automatically copy usernames and passwords to the clipboard for convenience.
+- Auto-copy feature: usernames are copied immediately, and passwords are copied automatically when you paste (Ctrl+V), keeping sensitive data secure.
 - Avoid duplicate accounts with the same username and password.
 - Vault data is saved in a JSON file, sorted by site and username.
 
