@@ -113,8 +113,17 @@ function Decrypt-Data {
     return [Text.Encoding]::UTF8.GetString($plainBytes)
 }
 
-
-
+function paste_detection {
+    while ($true) {
+        $ctrlDown = Test-KeyDown "LControlKey"
+        $vDown    = Test-KeyDown "V"
+        if ($ctrlDown -and $vDown) {
+            Write-Host "Detected: Ctrl + V"
+            break
+        }
+        Start-Sleep -Milliseconds 50
+    }
+}
 function Add-Password {
     # Ask for site
     $site = Read-Host "Enter site (e.g: gmail)"
@@ -159,9 +168,7 @@ function Get-Password {
         }
         break
     } while ($true)
-
     $site = $sites[[int]$siteChoice]
-
     # Find matching accounts
     $siteMatches = @()
     foreach ($item in $vault) {
@@ -192,20 +199,12 @@ function Get-Password {
     $acc = $siteMatches[$idx]
     Write-Host "`nUsername: $($acc.Username) is copied"
     $acc.Username | Set-Clipboard
-    while ($true) {
-        $ctrlDown = Test-KeyDown "LControlKey"
-        $vDown    = Test-KeyDown "V"
-        if ($ctrlDown -and $vDown) {
-            if (-not $comboTriggered) {
-                Write-Host "Detected: Ctrl + V"
-                break
-            }
-        }
-        Start-Sleep -Milliseconds 50
-    }
+    paste_detection
     $decryptedPassword = Decrypt-Data -encrypted $acc.Password -masterKey $master
     Write-Host "Password: $decryptedPassword is copied"
     $decryptedPassword | Set-Clipboard
+    paste_detection
+    Set-Clipboard ""
 }
 
 function Delete-Password {
@@ -342,25 +341,17 @@ while ($true) {
         Write-Host "No vault found. Type 'new' to create a master password."
     }
 }
-# Main Loop
-try {
-    # ===== main program =====
-    while ($true) {
-        Clear-Host
-        Show-Menu
-        $choice = Read-Host "Choose an option"
-
-        switch ($choice) {
-            1 { Add-Password }
-            2 { Get-Password }
-            3 { List-Accounts }
-            4 { Delete-Password }
-            5 { break 2}
-            default { Write-Host "Invalid choice." }
-        }
+# ===== main program =====
+while ($true) {
+    Clear-Host
+    Show-Menu
+    $choice = Read-Host "Choose an option"
+    switch ($choice) {
+        1 { Add-Password }
+        2 { Get-Password }
+        3 { List-Accounts }
+        4 { Delete-Password }
+        5 { break 2}
+        default { Write-Host "Invalid choice." }
     }
-}
-finally {
-    Set-Clipboard ""
-    Write-Host "Clipboard cleared (finally block)."
 }
