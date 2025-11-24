@@ -1,4 +1,14 @@
 # PasswordManager.ps1
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+
+public class KeyPressCheck {
+    [DllImport("user32.dll")]
+    public static extern short GetAsyncKeyState(int vKey);
+}
+"@
 
 $vault = [System.Collections.ArrayList]@()
 $vaultFile = "$PSScriptRoot\vault.json"
@@ -10,6 +20,11 @@ function Show-Menu {
     Write-Host "[3] List Accounts" -ForegroundColor Yellow
     Write-Host "[4] Delete Password" -ForegroundColor Yellow
     Write-Host "[5] Exit" -ForegroundColor Yellow
+}
+
+function Test-KeyDown($key) {
+    $code = [int][System.Windows.Forms.Keys]::$key
+    return ([KeyPressCheck]::GetAsyncKeyState($code) -band 0x8000) -ne 0
 }
 
 function Load-Data {
@@ -201,10 +216,17 @@ function Get-Password {
     $acc = $siteMatches[$idx]
     Write-Host "`nUsername: $($acc.Username) is copied"
     $acc.Username | Set-Clipboard
-    $seconds = 5
-    for ($i = $seconds; $i -gt 0; $i--) {
-        Write-Host -NoNewline "`rClearing clipboard in $i seconds..."
-        Start-Sleep -Seconds 1
+    while ($true) {
+        $ctrlDown = Test-KeyDown "LControlKey"
+        $vDown    = Test-KeyDown "V"
+
+        if ($ctrlDown -and $vDown) {
+            if (-not $comboTriggered) {
+                Write-Host "Detected: Ctrl + V"
+                break
+            }
+        }
+        Start-Sleep -Milliseconds 50
     }
     $decryptedPassword = Decrypt-Data -encrypted $acc.Password -masterKey $master
     Write-Host "Password: $decryptedPassword is copied"
@@ -322,11 +344,21 @@ while ($true) {
     
     if ($inputMaster -ieq "new") {
         # Create new master password
-        $secureMaster = Read-Host -AsSecureString "Create a new master password"
+        do {
+            $secureMaster = Read-Host -AsSecureString "Create a new master password"
+            $doublecheck = Read-Host -AsSecureString "Confirm master password"
+            $plain1 = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureMaster))
+            $plain2 = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($doublecheck))
+            if ($plain1 -ne $plain2) {
+                Write-Host "Passwords do not match."
+                continue
+            }
+            break
+        } while ( $true )
+        Write-Host "Master password set. You can now use the password manager."
         $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureMaster)
         $master = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
         $masterHash = [Convert]::ToBase64String((New-Object Security.Cryptography.SHA256Managed).ComputeHash([Text.Encoding]::UTF8.GetBytes($master)))
-        Write-Host "Master password set. You can now use the password manager."
         break
     }
 

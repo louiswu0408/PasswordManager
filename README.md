@@ -5,12 +5,18 @@ Stores encrypted passwords locally and allows adding, retrieving, listing, and d
 
 ---
 
+## Motivation
+
+I have many game accounts and used to save them all in a Google Doc, but constantly copying and pasting was annoying. This tool makes managing and accessing accounts faster, easier, and more secure. It also protects privacy when sharing a PC, so each user’s passwords remain encrypted and separate.
+
+---
+
 ## Features
 
 - Store multiple accounts with username and password.
 - Encrypt passwords using AES-256 with a unique salt and IV per entry.
 - Derive encryption key from your master password using PBKDF2 (Rfc2898DeriveBytes).
-- Automatically copy usernames and passwords to the clipboard for convenience.
+- Auto-copy feature: usernames are copied immediately, and passwords are copied automatically when you paste (Ctrl+V), keeping sensitive data secure.
 - Avoid duplicate accounts with the same username and password.
 - Vault data is saved in a JSON file, sorted by site and username.
 
@@ -18,7 +24,7 @@ Stores encrypted passwords locally and allows adding, retrieving, listing, and d
 
 ## Requirements
 
-- PowerShell 5.1 or later (Windows PowerShell or PowerShell Core)
+- PowerShell Core (pwsh, version 7+)
 - Windows OS (tested on Windows 10+)
 
 ---
