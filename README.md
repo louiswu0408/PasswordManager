@@ -24,7 +24,7 @@ I have many game accounts and used to save them all in a Google Doc, but constan
 
 ## Requirements
 
-- PowerShell 5.1 or later (Windows PowerShell or PowerShell Core)
+- PowerShell Core (pwsh, version 7+)
 - Windows OS (tested on Windows 10+)
 
 ---
