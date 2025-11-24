@@ -35,10 +35,8 @@ function Load-Data {
         # Read the JSON file
         $json = Get-Content -Path $filePath -Raw
         $data = $json | ConvertFrom-Json
-
         # Clear the in-memory vault
         $vault.Clear()
-
         # Add each entry to the ArrayList
         foreach ($item in $data) {
             $vault.Add([PSCustomObject]@{
@@ -57,10 +55,8 @@ function Load-Data {
 
 function Save-Data {
     param($filePath)
-
     # Sort vault: first by Site, then by Username
     $sortedVault = $vault | Sort-Object Site, Username
-
     # Convert to JSON and save
     $json = $sortedVault | ConvertTo-Json -Depth 3
     Set-Content -Path $filePath -Value $json
@@ -72,28 +68,22 @@ function Encrypt-Data {
         [string]$plainText,
         [string]$masterKey
     )
-
     # --- Generate RANDOM salt ---
     $salt = New-Object byte[] 16
     [System.Security.Cryptography.RNGCryptoServiceProvider]::Create().GetBytes($salt)
-
     # --- Derive key from password + salt ---
     $derive = New-Object System.Security.Cryptography.Rfc2898DeriveBytes($masterKey, $salt, 200000)
     $key = $derive.GetBytes(32)  # 256-bit key
-
     # --- Create AES and random IV ---
     $aes = [System.Security.Cryptography.Aes]::Create()
     $aes.GenerateIV()
     $iv = $aes.IV
-
     $aes.Key = $key
     $aes.IV  = $iv
-
     # --- Encrypt ---
     $encryptor = $aes.CreateEncryptor()
     $plainBytes = [Text.Encoding]::UTF8.GetBytes($plainText)
     $cipherBytes = $encryptor.TransformFinalBlock($plainBytes, 0, $plainBytes.Length)
-
     # --- Store salt + iv + ciphertext together ---
     $result = $salt + $iv + $cipherBytes
     return [Convert]::ToBase64String($result)
@@ -106,26 +96,20 @@ function Decrypt-Data {
         [string]$encrypted,
         [string]$masterKey
     )
-
     $allBytes = [Convert]::FromBase64String($encrypted)
-
     # --- Extract salt + iv ---
     $salt = $allBytes[0..15]
     $iv   = $allBytes[16..31]
     $cipherBytes = $allBytes[32..($allBytes.Length-1)]
-
     # --- Derive key using the same salt ---
     $derive = New-Object System.Security.Cryptography.Rfc2898DeriveBytes($masterKey, $salt, 200000)
     $key = $derive.GetBytes(32)
-
     # --- AES setup ---
     $aes = [System.Security.Cryptography.Aes]::Create()
     $aes.Key = $key
     $aes.IV  = $iv
-
     $decryptor = $aes.CreateDecryptor()
     $plainBytes = $decryptor.TransformFinalBlock($cipherBytes, 0, $cipherBytes.Length)
-
     return [Text.Encoding]::UTF8.GetString($plainBytes)
 }
 
@@ -134,22 +118,17 @@ function Decrypt-Data {
 function Add-Password {
     # Ask for site
     $site = Read-Host "Enter site (e.g: gmail)"
-    
     # Ask for username
     $username = Read-Host "Enter username/email"
-    
     # Ask for password
     $password = Read-Host "Enter password"
-    
     $exists = $vault | Where-Object {
         $_.Site -eq $site -and $_.Username -eq $username -and $_.MasterHash -eq $masterHash
     }
-
     if ($exists.Count -gt 0) {
         Write-Host "⚠ An account with the same site and username already exists."
         return
     }
-
     $encryptedPassword = Encrypt-Data -plainText $password -masterKey $master
     # Add new entry
     $vault.Add([PSCustomObject]@{
@@ -190,13 +169,10 @@ function Get-Password {
             $siteMatches += [PSCustomObject]$item
         }
     }
-
-
     if ($siteMatches.Count -eq 0) {
         Write-Host "No accounts found for '$site'"
         return
     }
-
     if ($siteMatches.Count -gt 1) {
         for ($i = 0; $i -lt $siteMatches.Count; $i++) {
             Write-Host "[$i] $($siteMatches[$i].Username)" -ForegroundColor Yellow
@@ -219,7 +195,6 @@ function Get-Password {
     while ($true) {
         $ctrlDown = Test-KeyDown "LControlKey"
         $vDown    = Test-KeyDown "V"
-
         if ($ctrlDown -and $vDown) {
             if (-not $comboTriggered) {
                 Write-Host "Detected: Ctrl + V"
@@ -236,7 +211,6 @@ function Get-Password {
 function Delete-Password {
     # Filter vault by master hash
     $filteredVault = $vault | Where-Object { $_.MasterHash -eq $masterHash }
-
     # Get unique sites
     $sites = @($filteredVault | Select-Object -ExpandProperty Site -Unique)
     if ($sites.Count -eq 0) {
@@ -288,9 +262,7 @@ function Delete-Password {
     else {
         $index = 0
     }
-
     $selected = $accounts[$index]
-
     # Remove account and save vault
     $vault.Remove($selected) | Out-Null
     Save-Data -filePath $vaultFile
@@ -299,32 +271,24 @@ function Delete-Password {
 
 
 function List-Accounts {
-
     if ($vault.Count -eq 0) {
         Write-Host "Vault is empty." -ForegroundColor Red
         return
     }
-
     # Filter vault by master hash
     $filteredVault = $vault | Where-Object { $_.MasterHash -eq $masterHash }
-    
     if ($filteredVault.Count -eq 0) {
         Write-Host "No accounts found for your master password." -ForegroundColor Red
         return
     }
-
     Write-Host "`nSaved accounts:" -ForegroundColor Cyan
-
     # Group by site, sorted
     $grouped = $filteredVault | Sort-Object Site, Username | Group-Object Site
-
     foreach ($group in $grouped) {
         Write-Host "`nSite: $($group.Name)" -ForegroundColor Cyan
         $accounts = $group.Group
-
         # Optional header
         Write-Host ("{0,-5} {1}" -f "Index", "Username") -ForegroundColor DarkCyan
-
         for ($i = 0; $i -lt $accounts.Count; $i++) {
             Write-Host ("{0,-5} {1}" -f "[$i]", $accounts[$i].Username) -ForegroundColor Yellow
         }
@@ -336,12 +300,10 @@ function List-Accounts {
 Load-Data -filePath $vaultFile
 while ($true) {
     $secureMaster = Read-Host -AsSecureString "Enter your master password (type 'new' to create, "q" to quit)"
-    
     # Check if user typed 'sign up'
     if ($secureMaster.Length -eq 0) { continue } # ignore empty input
     $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureMaster)
     $inputMaster = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
-    
     if ($inputMaster -ieq "new") {
         # Create new master password
         do {
@@ -361,7 +323,6 @@ while ($true) {
         $masterHash = [Convert]::ToBase64String((New-Object Security.Cryptography.SHA256Managed).ComputeHash([Text.Encoding]::UTF8.GetBytes($master)))
         break
     }
-
     if ($inputMaster -ieq "q") {
         exit 0
     }
@@ -382,17 +343,24 @@ while ($true) {
     }
 }
 # Main Loop
-while ($true) {
-    Clear-Host
-    Show-Menu
-    $choice = Read-Host "Choose an option"
+try {
+    # ===== main program =====
+    while ($true) {
+        Clear-Host
+        Show-Menu
+        $choice = Read-Host "Choose an option"
 
-    switch ($choice) {
-        1 { Add-Password }
-        2 { Get-Password }
-        3 { List-Accounts }
-        4 { Delete-Password }
-        5 { return }
-        default { Write-Host "Invalid choice, try again." }
+        switch ($choice) {
+            1 { Add-Password }
+            2 { Get-Password }
+            3 { List-Accounts }
+            4 { Delete-Password }
+            5 { break 2}
+            default { Write-Host "Invalid choice." }
+        }
     }
+}
+finally {
+    Set-Clipboard ""
+    Write-Host "Clipboard cleared (finally block)."
 }
