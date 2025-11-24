@@ -7,7 +7,7 @@ Stores encrypted passwords locally and allows adding, retrieving, listing, and d
 
 ## Motivation
 
-I have many game accounts and used to save them all in a Google Doc, but constantly copying and pasting was annoying. This tool makes managing and accessing accounts faster, easier, and more secure. It also protects privacy when sharing a PC, so each user’s passwords remain encrypted and separate.
+I have many game accounts and used to save them all in a Google Doc, but constantly copying and pasting was annoying. This tool makes managing and accessing accounts faster, easier, and more secure. It also protects privacy when sharing a PC, since each user’s passwords remain encrypted and separate.
 
 ---
 
